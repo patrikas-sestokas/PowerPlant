@@ -1,0 +1,29 @@
+@PowerPlant.API_HostAddress = http://localhost:5062
+
+### List power plants (paged)
+@host = http://localhost:5062
+GET {{host}}/powerplants?page=0&count=10
+
+### Filter by owner (LIKE)
+GET {{host}}/powerplants?owner=John Doe&page=0&count=10
+
+### Create a power plant (valid)
+POST {{host}}/powerplants
+Content-Type: application/json
+
+{
+  "owner": "John Doe",
+  "power": 120,
+  "validFrom": "2025-01-01",
+  "validTo": "2025-12-31"
+}
+
+### Create a power plant (invalid owner)
+POST {{host}}/powerplants
+Content-Type: application/json
+
+{
+  "owner": "John",
+  "power": 50,
+  "validFrom": "2025-01-01"
+}
