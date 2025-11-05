@@ -14,25 +14,23 @@ public class PowerPlantPostTests
         await using var factory = new PowerPlantApiFactory();
         using var client = factory.CreateClient();
 
-        var payload = new
-        {
-            owner = "Jane Doe",
-            power = 125,
-            validFrom = new DateOnly(2025, 1, 1),
-            validTo = new DateOnly(2025, 12, 31)
-        };
+        var payload = new PowerPlantDto(
+            "Jane Doe",
+            125,
+            new DateOnly(2025, 1, 1),
+            new DateOnly(2025, 12, 31));
 
         var response = await client.PostAsJsonAsync("/powerplants", payload);
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        Assert.StartsWith("/powerplants/?id=", response.Headers.Location?.OriginalString);
+        Assert.StartsWith("/powerplants", response.Headers.Location?.LocalPath);
 
         var created = await response.Content.ReadFromJsonAsync<PowerPlant>();
         Assert.NotNull(created);
-        Assert.Equal(payload.owner, created!.Owner);
-        Assert.Equal(Convert.ToDecimal(payload.power), created.Power);
-        Assert.Equal(payload.validFrom, created.ValidFrom);
-        Assert.Equal(payload.validTo, created.ValidTo);
+        Assert.Equal(payload.Owner, created!.Owner);
+        Assert.Equal(Convert.ToDecimal(payload.Power), created.Power);
+        Assert.Equal(payload.ValidFrom, created.ValidFrom);
+        Assert.Equal(payload.ValidTo, created.ValidTo);
 
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
@@ -63,13 +61,9 @@ public class PowerPlantPostTests
         var expectedMessage =
             $"\"owner\" does not consist of two words (text-only characters) separated by a whitespace, received: {owner}";
 
-        await AssertBadRequestAsync(new
-        {
-            owner,
-            power = 50,
-            validFrom = new DateOnly(2025, 1, 1),
-            validTo = (DateOnly?)null
-        }, expectedMessage);
+        await AssertBadRequestAsync(
+            new PowerPlantDto(owner, 50, new DateOnly(2025, 1, 1)),
+            expectedMessage);
     }
 
     [Theory]
@@ -80,13 +74,9 @@ public class PowerPlantPostTests
     {
         var expectedMessage = $"\"power\" must be between 0 and 200, received: {power}";
 
-        await AssertBadRequestAsync(new
-        {
-            owner = "Jane Doe",
-            power,
-            validFrom = new DateOnly(2025, 1, 1),
-            validTo = (DateOnly?)null
-        }, expectedMessage);
+        await AssertBadRequestAsync(
+            new PowerPlantDto("Jane Doe", power, new DateOnly(2025, 1, 1)), 
+            expectedMessage);
     }
 
     [Fact]
@@ -95,18 +85,14 @@ public class PowerPlantPostTests
         var validFrom = new DateOnly(2025, 1, 10);
         var validTo = new DateOnly(2025, 1, 5);
         var expectedMessage =
-            $"\"valid_from\" - \"valid_to\" fails sanity check, received: {validFrom:yyyy-MM-dd} - {validTo:yyyy-MM-dd}";
+            $"\"valid_to\" precedes \"valid_from\", received: {validFrom:yyyy-MM-dd} - {validTo:yyyy-MM-dd}";
 
-        await AssertBadRequestAsync(new
-        {
-            owner = "Jane Doe",
-            power = 100,
-            validFrom,
-            validTo
-        }, expectedMessage);
+        await AssertBadRequestAsync(
+            new PowerPlantDto("Jane Doe", 100, validFrom, validTo), 
+            expectedMessage);
     }
 
-    private static async Task AssertBadRequestAsync(object payload, string expectedMessage)
+    private static async Task AssertBadRequestAsync<T>(T payload, string expectedMessage)
     {
         await using var factory = new PowerPlantApiFactory();
         using var client = factory.CreateClient();

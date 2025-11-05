@@ -30,41 +30,47 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.MapGet("/powerplants/{id:guid}", async (Guid id, ApplicationDbContext db, CancellationToken ct) =>
+{
+    var entity = await db.PowerPlants.FindAsync([id], ct);
+    return entity is null ? Results.NotFound() : Results.Ok(entity);
+}).WithName("GetPowerPlantById");
+
 app.MapGet("/powerplants", async (ApplicationDbContext db, CancellationToken ct, string? owner, int page = 0, int count = 10) =>
 {
     page = Math.Max(0, page);
     count = Math.Clamp(count <= 0 ? 10 : count, 1, 200);
-    var query = db.PowerPlants.AsNoTracking();
+    var query = db.PowerPlants.AsNoTracking().OrderBy(p => p.Id).AsQueryable();
 
-    if (string.IsNullOrWhiteSpace(owner))
+    if (!string.IsNullOrWhiteSpace(owner))
     {
-        var paged = await query.Skip(page * count).Take(count).ToListAsync(ct);
-        return Results.Ok(new PowerPlantListResponse(paged));
+        if (db.Database.IsNpgsql())
+            query = query.Where(p =>
+                EF.Functions.ILike(
+                    PgFunctions.Unaccent(p.Owner),
+                    PgFunctions.Unaccent($"%{owner}%")));
+        else
+            query = query.Where(p => p.Owner.Contains(owner, StringComparison.OrdinalIgnoreCase));
     }
 
-    if (db.Database.IsNpgsql())
-        query = query.Where(p =>
-            EF.Functions.ILike(
-                PgFunctions.Unaccent(p.Owner),
-                PgFunctions.Unaccent($"%{owner}%")));
-    else
-        query = query.Where(p => p.Owner.Contains(owner, StringComparison.OrdinalIgnoreCase));
+    var totalCount = await query.CountAsync(ct);
+    var totalPages = (int)Math.Ceiling((double)totalCount / count);
 
     var list = await query
-        .OrderBy(p => p.Id)
         .Skip(page * count)
         .Take(count)
         .ToListAsync(ct);
 
-    return Results.Ok(new PowerPlantListResponse(list));
-}).WithOpenApi();
+    return Results.Ok(new PowerPlantListResponse(list, totalCount, totalPages));
+}).WithName("GetPowerPlants");
 
 // \p{L} - matches any kind of letter from any language.
+// [\p{L}'-] - in addition matches dashes or quotes attributable to some names
 // + - repeats previous condition 1..N times
-// '\ ' - matches whitespace
+// \s - whitespace
 // $ - end of string
 // ^ - start of string
-var ownerValidation = new Regex(@"^\p{L}+\ \p{L}+$", RegexOptions.Compiled);
+var ownerValidation = new Regex(@"^\p{L}[\p{L}'-]+\s[\p{L}'-]+$", RegexOptions.Compiled);
 
 app.MapPost("/powerplants", async (ApplicationDbContext db, CancellationToken ct, PowerPlantDto dto) =>
 {
@@ -78,7 +84,7 @@ app.MapPost("/powerplants", async (ApplicationDbContext db, CancellationToken ct
 
     if (dto.ValidTo is not null && dto.ValidFrom > dto.ValidTo)
         return Results.BadRequest(
-            $"\"valid_from\" - \"valid_to\" fails sanity check, received: {dto.ValidFrom:yyyy-MM-dd} - {dto.ValidTo:yyyy-MM-dd}");
+            $"\"valid_to\" precedes \"valid_from\", received: {dto.ValidFrom:yyyy-MM-dd} - {dto.ValidTo:yyyy-MM-dd}");
     
     var entity = new PowerPlant
     {
@@ -91,12 +97,14 @@ app.MapPost("/powerplants", async (ApplicationDbContext db, CancellationToken ct
     await db.PowerPlants.AddAsync(entity, ct);
     await db.SaveChangesAsync(ct);
 
-    return Results.Created($"/powerplants/?id={entity.Id}", entity);
-}).WithOpenApi();
+    return Results.CreatedAtRoute(
+        routeName: "GetPowerPlantById",
+        routeValues: new { id = entity.Id },
+        value: entity);
+}).WithName("PostPowerPlant");
 
 app.Run();
 
-sealed record PowerPlantDto(string Owner, decimal Power, DateOnly ValidFrom, DateOnly? ValidTo = null);
-sealed record PowerPlantListResponse(IReadOnlyList<PowerPlant> PowerPlants);
-
+public sealed record PowerPlantDto(string Owner, decimal Power, DateOnly ValidFrom, DateOnly? ValidTo = null);
+public sealed record PowerPlantListResponse(IReadOnlyList<PowerPlant> PowerPlants, int TotalCount, int TotalPages);
 public partial class Program;

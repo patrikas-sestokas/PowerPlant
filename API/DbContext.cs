@@ -8,13 +8,17 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.HasPostgresExtension("unaccent");
-        var mi = typeof(PgFunctions).GetMethod(nameof(PgFunctions.Unaccent), [typeof(string)]);
-        if (mi != null)
-            modelBuilder
-                .HasDbFunction(mi)
-                .HasName("unaccent")
-                .HasSchema(null);
+        if (Database.IsNpgsql())
+        {
+            modelBuilder.HasPostgresExtension("unaccent");
+            modelBuilder.HasPostgresExtension("pg_trgm");
+            var mi = typeof(PgFunctions).GetMethod(nameof(PgFunctions.Unaccent), [typeof(string)]);
+            if (mi != null)
+                modelBuilder
+                    .HasDbFunction(mi)
+                    .HasName("unaccent")
+                    .HasSchema(null);
+        }
         base.OnModelCreating(modelBuilder);
     }
 }

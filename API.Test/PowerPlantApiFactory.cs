@@ -24,9 +24,8 @@ public sealed class PowerPlantApiFactory : WebApplicationFactory<Program>
             services.RemoveAll<IDbContextOptionsConfiguration<ApplicationDbContext>>();
 
             services.AddDbContext<ApplicationDbContext>(options =>
-            {
-                options.UseInMemoryDatabase(_databaseName);
-            });
+                options.UseInMemoryDatabase(_databaseName)
+            );
         });
     }
 }

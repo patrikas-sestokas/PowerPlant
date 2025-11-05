@@ -9,6 +9,29 @@ namespace API.Test;
 public class PowerPlantGetTests
 {
     [Fact]
+    public async Task Get_ReturnsNotFound_WhenPlantDoesNotExist()
+    {
+        await using var factory = new PowerPlantApiFactory();
+        using var client = factory.CreateClient();
+
+        var response = await client.GetAsync($"/powerplants/{CreateGuid(0)}");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+    [Fact]
+    public async Task Get_ReturnsPlant_WhenPlantExists()
+    {
+        await using var factory = new PowerPlantApiFactory();
+        var id = CreateGuid(1);
+        var plant = CreatePlant("Jane Doe", 125, new DateOnly(2025, 1, 1), id: id);
+        await SeedAsync(factory, plant);
+
+        using var client = factory.CreateClient();
+        var result = await client.GetFromJsonAsync<PowerPlant>($"/powerplants/{id}");
+
+        Assert.Equivalent(plant, result, strict: true);
+    }
+    [Fact]
     public async Task Get_ReturnsEmptyCollection_WhenNoPlantsExist()
     {
         await using var factory = new PowerPlantApiFactory();
@@ -41,9 +64,9 @@ public class PowerPlantGetTests
 
         Assert.NotNull(result);
         Assert.Equal(10, result!.PowerPlants.Count);
-
-        var expected = plants.OrderBy(p => p.Id).Take(10).Select(p => p.Id);
-        Assert.Equal(expected, result.PowerPlants.Select(p => p.Id));
+        Assert.Equal(
+            plants.OrderBy(p => p.Id).Take(10).Select(p => p.Id), 
+            result.PowerPlants.Select(p => p.Id));
     }
 
     [Fact]
@@ -63,10 +86,9 @@ public class PowerPlantGetTests
         var result = await client.GetFromJsonAsync<PowerPlantListResponse>("/powerplants?page=1&count=3");
 
         Assert.NotNull(result);
-        var ordered = plants.OrderBy(p => p.Id);
         Assert.Equal(3, result!.PowerPlants.Count);
         Assert.Equal(
-            ordered.Skip(3).Take(3).Select(p => p.Id), 
+            plants.OrderBy(p => p.Id).Skip(3).Take(3).Select(p => p.Id), 
             result.PowerPlants.Select(p => p.Id));
     }
 
