@@ -5,15 +5,15 @@ using API;
 using API.Models;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
-using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
 builder.Services.AddDbContext<ApplicationDbContext>(o =>
     o.UseNpgsql(builder.Configuration.GetConnectionString("Default")).UseSnakeCaseNamingConvention());
-var app = builder.Build();
+builder.Services.AddHealthChecks();
 
+var app = builder.Build();
 app.UseExceptionHandler(errorApp =>
 {
     errorApp.Run(async context =>
@@ -51,14 +51,13 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapOpenApi();
-app.MapScalarApiReference("/docs", options =>
-{
-    options.WithTitle("PowerPlant API")
-        .ExpandAllTags()
-        .ShowOperationId();
-});
-
 app.UseHttpsRedirection();
+app.UseSwaggerUI(c =>
+{
+    c.SwaggerEndpoint("/openapi/v1.json", "PowerPlant API v1");
+    c.RoutePrefix = "docs";
+    c.DocumentTitle = "PowerPlant API";
+});
 
 app.MapGet("/powerplants/{id:guid}", async (Guid id, ApplicationDbContext db, CancellationToken ct) =>
 {
@@ -106,7 +105,7 @@ app.MapGet("/powerplants", async (ApplicationDbContext db, CancellationToken ct,
 // ^ - start of string
 var ownerValidation = new Regex(@"^\p{L}[\p{L}'-]+\s[\p{L}'-]+$", RegexOptions.Compiled);
 
-// More fluent validation packages could be used, but for 4 fields it's overkill, so manual approach of returning RFC9110 payload form picked
+// More fluent validation packages could be used, but for 4 fields it's overkill, so manual approach is picked
 app.MapPost("/powerplants", async (ApplicationDbContext db, CancellationToken ct, [FromBody] PowerPlantDto dto) =>
 {
     var errors = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
@@ -144,13 +143,13 @@ app.MapPost("/powerplants", async (ApplicationDbContext db, CancellationToken ct
         routeValues: new { id = entity.Id },
         value: entity);
 }).WithName("PostPowerPlant");
-
+app.MapHealthChecks("/healthz");
 app.Run();
 
 // Annotations don't work with minimal API infrastructure for validation purposes, but that is not their purpose.
 // Their purpose is to inform OpenAPI service about shape and requirements of payload.
 public sealed record PowerPlantDto(
-    [property: Required, RegularExpression(@"^\p{L}[\p{L}'-]+\s[\p{L}'-]+$"), MaxLength(200)] string? Owner,
+    [property: Required, MaxLength(200)] string? Owner,
     [property: Required, Range(0,200)] decimal? Power,
     [property: Required] DateOnly? ValidFrom, 
     DateOnly? ValidTo = null);

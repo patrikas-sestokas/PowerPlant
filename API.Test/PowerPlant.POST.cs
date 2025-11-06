@@ -7,7 +7,7 @@ namespace API.Test;
 
 public class PowerPlantPostTests
 {
-    // Minimal type to deserialize RFC9110 validation result
+    // Minimal type to deserialize validation result
     private sealed class ValidationProblem
     {
         public string? Type { get; init; }
