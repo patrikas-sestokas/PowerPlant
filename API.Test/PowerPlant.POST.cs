@@ -136,7 +136,16 @@ public class PowerPlantPostTests
 
         Assert.Contains(expected, vp.Errors[field]);
     }
+    
+    [Fact]
+    public async Task Post_ReturnsValidationProblem_WhenOwnerTooLong()
+    {
+        var vp = await AssertValidationProblemAsync(
+            new PowerPlantDto(new string('a', 201), 50m, new DateOnly(2025, 1, 1)));
 
+        var expected = "'owner' must be at most 200 characters long";
+        Assert.Contains(expected, vp.Errors["owner"]);
+    }
 
     // --- helpers ---
 

@@ -55,7 +55,7 @@ Run the container, providing the connection string for your PostgreSQL instance 
 ```bash
 docker run --rm \
   -p 8080:8080 \
-  -e ConnectionStrings__Default="Host=host.docker.internal;Port=5432;Database=powerplant;Username=powerplant;Password=change-me" \
+  -e ConnectionStrings__Default="Host=host.docker.internal;Port=5432;Database={db};Username={username};Password={pass}" \
   powerplant-api
 ```
 Swagger UI will be served at `http://localhost:8080/docs`. Ensure the database already has the required schema (`dotnet ef database update`) before starting the container.

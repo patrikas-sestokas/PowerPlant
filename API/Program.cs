@@ -115,6 +115,8 @@ app.MapPost("/powerplants", async Task<Results<CreatedAtRoute<PowerPlant>, Valid
     var errors = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
     if (string.IsNullOrWhiteSpace(dto.Owner))
         errors["owner"] = ["'owner' cannot be empty"];
+    else if (dto.Owner.Length > 200)
+        errors["owner"] = ["'owner' must be at most 200 characters long"];
     else if (!ownerValidation.IsMatch(dto.Owner))
         errors["owner"] = [$"'owner' must be two words (letters only) separated by a space, received: {dto.Owner}"];
     
