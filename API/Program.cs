@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using API;
 using API.Models;
 using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -59,13 +60,13 @@ app.UseSwaggerUI(c =>
     c.DocumentTitle = "PowerPlant API";
 });
 
-app.MapGet("/powerplants/{id:guid}", async (Guid id, ApplicationDbContext db, CancellationToken ct) =>
+app.MapGet("/powerplants/{id:guid}", async Task<Results<Ok<PowerPlant>, NotFound>> (Guid id, ApplicationDbContext db, CancellationToken ct) =>
 {
     var entity = await db.PowerPlants.FindAsync([id], ct);
-    return entity is null ? Results.NotFound() : Results.Ok(entity);
+    return entity is null ? TypedResults.NotFound() : TypedResults.Ok(entity);
 }).WithName("GetPowerPlantById");
 
-app.MapGet("/powerplants", async (ApplicationDbContext db, CancellationToken ct, string? owner, int page = 0, int count = 10) =>
+app.MapGet("/powerplants", async Task<Results<Ok<PowerPlantListResponse>, NotFound>> (ApplicationDbContext db, CancellationToken ct, string? owner, int page = 0, int count = 10) =>
 {
     page = Math.Max(0, page);
     count = Math.Clamp(count <= 0 ? 10 : count, 1, 200);
@@ -94,7 +95,7 @@ app.MapGet("/powerplants", async (ApplicationDbContext db, CancellationToken ct,
         .Take(count)
         .ToListAsync(ct);
 
-    return Results.Ok(new PowerPlantListResponse(list, totalCount, totalPages));
+    return TypedResults.Ok(new PowerPlantListResponse(list, totalCount, totalPages));
 }).WithName("GetPowerPlants");
 
 // \p{L} - matches any kind of letter from any language.
@@ -106,7 +107,10 @@ app.MapGet("/powerplants", async (ApplicationDbContext db, CancellationToken ct,
 var ownerValidation = new Regex(@"^\p{L}[\p{L}'-]+\s[\p{L}'-]+$", RegexOptions.Compiled);
 
 // More fluent validation packages could be used, but for 4 fields it's overkill, so manual approach is picked
-app.MapPost("/powerplants", async (ApplicationDbContext db, CancellationToken ct, [FromBody] PowerPlantDto dto) =>
+app.MapPost("/powerplants", async Task<Results<CreatedAtRoute<PowerPlant>, ValidationProblem>> (
+    ApplicationDbContext db, 
+    CancellationToken ct, 
+    [FromBody] PowerPlantDto dto) =>
 {
     var errors = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
     if (string.IsNullOrWhiteSpace(dto.Owner))
@@ -138,7 +142,7 @@ app.MapPost("/powerplants", async (ApplicationDbContext db, CancellationToken ct
     await db.PowerPlants.AddAsync(entity, ct);
     await db.SaveChangesAsync(ct);
 
-    return Results.CreatedAtRoute(
+    return TypedResults.CreatedAtRoute(
         routeName: "GetPowerPlantById",
         routeValues: new { id = entity.Id },
         value: entity);
